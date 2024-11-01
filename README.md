@@ -1,5 +1,5 @@
 # UTPB-COSC-6389-Project1
-This repo contains the assignment and provided code base for Project 1 of the graduate Computational Biomimicry class.
+This repo contains the assignment and code base for Project 1 of the graduate Computational Biomimicry class.
 
 The goals of this project are:
 1) Improve student understanding of Python
@@ -29,3 +29,4 @@ Grading criteria:
 
 Deliverables for this project:
 Three Python files, one containing the implementation of the Knapsack application, another for the TSP application, and a third for the user's choice problem application.
+
