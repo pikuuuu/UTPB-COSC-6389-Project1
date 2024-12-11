@@ -4,330 +4,240 @@ import tkinter as tk
 from tkinter import *
 import threading
 
+num_elements = 100
+fraction_target = 0.7
+min_val = 128
+max_val = 2048
 
-NUM_ITEMS = 100
-FRAC_TARGET = 0.7
-MIN_VALUE = 128
-MAX_VALUE = 2048
+padding_screen = 25
+padding_element = 5
+border_thickness = 5
 
-SCREEN_PADDING = 25
-ITEM_PADDING = 5
-STROKE_WIDTH = 5
+num_iterations = 1000
+population_size = 50
+elite_count = 2
+mutation_probability = 0.1
+
+delay_time = 0.1
+
+def generate_random_color():
+    red = random.randint(0x10, 0xff)
+    green = random.randint(0x10, 0xff)
+    blue = random.randint(0x10, 0xff)
+    hex_color = '#{:02x}{:02x}{:02x}'.format(red, green, blue)
+    return hex_color
 
 
-NUM_GENERATIONS = 1000
-POP_SIZE = 100  
-TOURNAMENT_SIZE = 5  
-CROSSOVER_RATE = 0.8
-MUTATION_RATE = 0.02  
-ELITISM_COUNT = 4  
-
-SLEEP_TIME = 0.1
-
-def random_rgb_color():
-    """Generate random RGB color in hex format."""
-    return '#{:02x}{:02x}{:02x}'.format(
-        random.randint(0x10, 0xff),
-        random.randint(0x10, 0xff),
-        random.randint(0x10, 0xff)
-    )
-
-class Item:
-    """Represents an item in the knapsack problem."""
+class Element:
     def __init__(self):
-        self.value = random.randint(MIN_VALUE, MAX_VALUE)
-        self.color = random_rgb_color()
-        self.x = self.y = self.w = self.h = 0
+        self.value = random.randint(min_val, max_val)
+        self.color = generate_random_color()
+        self.x = 0
+        self.y = 0
+        self.width = 0
+        self.height = 0
 
-    def place(self, x, y, w, h):
-        """Set item's position and dimensions."""
-        self.x, self.y, self.w, self.h = x, y, w, h
+    def place(self, x, y, width, height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
 
-    def draw(self, canvas, active=False):
-        """Draw the item on the canvas."""
-        canvas.create_text(
-            self.x + self.w + ITEM_PADDING + STROKE_WIDTH*2,
-            self.y + self.h/2,
-            text=f'{self.value}'
-        )
-        canvas.create_rectangle(
-            self.x, self.y,
-            self.x + self.w,
-            self.y + self.h,
-            fill=self.color if active else '',
-            outline=self.color,
-            width=STROKE_WIDTH
-        )
+    def draw(self, canvas, is_active=False):
+        canvas.create_text(self.x + self.width + padding_element + border_thickness * 2, self.y + self.height / 2, text=f'{self.value}')
+        if is_active:
+            canvas.create_rectangle(self.x,
+                                    self.y,
+                                    self.x + self.width,
+                                    self.y + self.height,
+                                    fill=self.color,
+                                    outline=self.color,
+                                    width=border_thickness)
+        else:
+            canvas.create_rectangle(self.x,
+                                    self.y,
+                                    self.x + self.width,
+                                    self.y + self.height,
+                                    fill='',
+                                    outline=self.color,
+                                    width=border_thickness)
 
-class GeneticAlgorithm:
-    """Improved Genetic Algorithm implementation."""
-    def __init__(self, items, target):
-        self.items = items
-        self.target = target
-        self.best_solution = None
-        self.best_fitness = float('inf')
 
-    def create_individual(self):
-        """Create a random individual with balanced initialization."""
-        genome = [False] * len(self.items)
-        num_ones = int(len(genome) * FRAC_TARGET)
-        indices = random.sample(range(len(genome)), num_ones)
-        for idx in indices:
-            genome[idx] = True
-        return genome
-
-    def calculate_fitness(self, genome):
-        """Calculate fitness with penalty for exceeding target."""
-        total = sum(item.value for item, selected in zip(self.items, genome) if selected)
-        if total > self.target:
-            
-            return abs(total - self.target) * 1.5
-        return abs(total - self.target)
-
-    def tournament_selection(self, population):
-        """Tournament selection for parent selection."""
-        tournament = random.sample(population, TOURNAMENT_SIZE)
-        return min(tournament, key=lambda x: self.calculate_fitness(x))
-
-    def uniform_crossover(self, parent1, parent2):
-        """Uniform crossover implementation."""
-        if random.random() > CROSSOVER_RATE:
-            return parent1[:]
-        
-        child = []
-        for gene1, gene2 in zip(parent1, parent2):
-            if random.random() < 0.5:
-                child.append(gene1)
-            else:
-                child.append(gene2)
-        return child
-
-    def adaptive_mutation(self, genome):
-        """Adaptive mutation with varying rates based on diversity."""
-        if random.random() > MUTATION_RATE:
-            return genome
-        
-        mutated = genome[:]
-        num_mutations = max(1, int(len(genome) * MUTATION_RATE))
-        positions = random.sample(range(len(genome)), num_mutations)
-        
-        for pos in positions:
-            mutated[pos] = not mutated[pos]
-        return mutated
-
-    def evolve_population(self, population):
-        """Evolve population using improved genetic operators."""
-        new_population = []
-        
-        
-        sorted_population = sorted(population, key=lambda x: self.calculate_fitness(x))
-        new_population.extend(sorted_population[:ELITISM_COUNT])
-        
-        
-        while len(new_population) < POP_SIZE:
-            parent1 = self.tournament_selection(population)
-            parent2 = self.tournament_selection(population)
-            child = self.uniform_crossover(parent1, parent2)
-            child = self.adaptive_mutation(child)
-            new_population.append(child)
-        
-        return new_population
-
-class UI(tk.Tk):
-    """UI implementation with improved genetic algorithm integration."""
+class KnapsackUI(tk.Tk):
     def __init__(self):
-        super().__init__()
-        self.setup_window()
-        self.setup_ui()
-        self.items_list = []
-        self.target = 0
-        self.ga = None
-        self.mainloop()
-
-    def setup_window(self):
-        """Setup window properties."""
+        tk.Tk.__init__(self)
         self.title("Knapsack Solver")
-        self.width, self.height = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.geometry(f"{self.width}x{self.height}+0+0")
+        self.option_add("*tearOff", FALSE)
+        self.screen_width, self.screen_height = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.geometry("%dx%d+0+0" % (self.screen_width, self.screen_height))
         self.state("zoomed")
 
-    def setup_ui(self):
-        """Setup UI elements."""
         self.canvas = Canvas(self)
-        self.canvas.place(x=0, y=0, width=self.width, height=self.height)
-        
+        self.canvas.place(x=0, y=0, width=self.screen_width, height=self.screen_height)
+
+        self.element_list = []
+
         menu_bar = Menu(self)
         self['menu'] = menu_bar
-        
-        knapsack_menu = Menu(menu_bar)
-        menu_bar.add_cascade(menu=knapsack_menu, label='Knapsack', underline=0)
-        
-        knapsack_menu.add_command(label="Generate", command=self.generate_knapsack, underline=0)
-        knapsack_menu.add_command(label="Set Target", command=self.set_target, underline=0)
-        knapsack_menu.add_command(label="Run Solver", command=self.start_solver, underline=0)
 
-    def generate_knapsack(self):
-        """Generate knapsack items."""
-        self.items_list.clear()
-        seen_values = set()
-        
-        while len(self.items_list) < NUM_ITEMS:
-            item = Item()
-            if item.value not in seen_values:
-                self.items_list.append(item)
-                seen_values.add(item.value)
-        
-        self.arrange_items()
-        self.draw_items()
+        menu_knapsack = Menu(menu_bar)
+        menu_bar.add_cascade(menu=menu_knapsack, label='Knapsack', underline=0)
 
-    def arrange_items(self):
-        """Arrange items on canvas."""
-        w = self.width - SCREEN_PADDING
-        h = self.height - SCREEN_PADDING
-        num_rows = math.ceil(NUM_ITEMS / 6)
-        row_w = w / 8 - ITEM_PADDING
-        row_h = (h - 200) / num_rows
-        
-        item_max = max(item.value for item in self.items_list)
-        
-        for x in range(6):
-            for y in range(num_rows):
-                idx = x * num_rows + y
-                if idx >= NUM_ITEMS:
+        def generate_elements():
+            self.create_knapsack()
+            self.render_elements()
+
+        menu_knapsack.add_command(label="Generate", command=generate_elements, underline=0)
+
+        self.target_value = 0
+
+        def set_target_value():
+            selected_elements = random.sample(self.element_list, int(num_elements * fraction_target))
+            self.target_value = sum(element.value for element in selected_elements)
+            self.render_target()
+
+        menu_knapsack.add_command(label="Set Target", command=set_target_value, underline=0)
+
+        def initiate_thread():
+            thread = threading.Thread(target=self.execute, args=())
+            thread.start()
+
+        menu_knapsack.add_command(label="Run", command=initiate_thread, underline=0)
+
+        self.mainloop()
+
+    def get_random_element(self):
+        element = Element()
+        for existing_element in self.element_list:
+            if element.value == existing_element.value:
+                return None
+        return element
+
+    def add_element(self):
+        element = self.get_random_element()
+        while element is None:
+            element = self.get_random_element()
+        self.element_list.append(element)
+
+    def create_knapsack(self):
+        for i in range(num_elements):
+            self.add_element()
+
+        max_value = 0
+        min_value = 9999
+        for element in self.element_list:
+            min_value = min(min_value, element.value)
+            max_value = max(max_value, element.value)
+
+        width = self.screen_width - padding_screen
+        height = self.screen_height - padding_screen
+        rows = math.ceil(num_elements / 6)
+        row_width = width / 8 - padding_element
+        row_height = (height - 200) / rows
+
+        for x in range(0, 6):
+            for y in range(0, rows):
+                if x * rows + y >= num_elements:
                     break
-                    
-                item = self.items_list[idx]
-                item_w = row_w / 2
-                item_h = max(item.value / item_max * row_h, 1)
-                
-                item.place(
-                    SCREEN_PADDING + x * row_w + x * ITEM_PADDING,
-                    SCREEN_PADDING + y * row_h + y * ITEM_PADDING,
-                    item_w,
-                    item_h
-                )
-
-    def set_target(self):
-        """Set target value for knapsack."""
-        if not self.items_list:
-            return
-            
-        target_items = random.sample(self.items_list, int(NUM_ITEMS * FRAC_TARGET))
-        self.target = sum(item.value for item in target_items)
-        self.draw_target()
-        
-        
-        self.ga = GeneticAlgorithm(self.items_list, self.target)
-
-    def start_solver(self):
-        """Start solver in separate thread."""
-        if not self.target or not self.items_list:
-            return
-            
-        thread = threading.Thread(target=self.run_solver)
-        thread.daemon = True
-        thread.start()
-
-    def run_solver(self):
-        """Run genetic algorithm solver."""
-        if not self.ga:
-            return
-
-        
-        population = [self.ga.create_individual() for _ in range(POP_SIZE)]
-        
-        for generation in range(NUM_GENERATIONS):
-            
-            current_best = min(population, key=self.ga.calculate_fitness)
-            current_fitness = self.ga.calculate_fitness(current_best)
-            
-            
-            if current_fitness < self.ga.best_fitness:
-                self.ga.best_solution = current_best
-                self.ga.best_fitness = current_fitness
-                
-                
-                self.update_display(current_best, current_fitness, generation)
-                
-                
-                if current_fitness == 0:
-                    break
-            
-            
-            population = self.ga.evolve_population(population)
-            
-            
-            self.after(int(SLEEP_TIME * 1000))
-
-    def update_display(self, solution, fitness, generation):
-        """Update UI with current solution."""
-        def update():
-            self.clear_canvas()
-            self.draw_target()
-            self.draw_solution(solution, generation)
-            total_value = sum(item.value for item, selected in zip(self.items_list, solution) if selected)
-            self.draw_sum(total_value)
-        
-        self.after(0, update)
+                element = self.element_list[x * rows + y]
+                element_width = row_width / 2
+                element_height = max(element.value / max_value * row_height, 1)
+                element.place(padding_screen + x * row_width + x * padding_element,
+                              padding_screen + y * row_height + y * padding_element,
+                              element_width,
+                              element_height)
 
     def clear_canvas(self):
-        """Clear canvas."""
         self.canvas.delete("all")
 
-    def draw_items(self):
-        """Draw all items."""
-        for item in self.items_list:
-            item.draw(self.canvas)
+    def render_elements(self):
+        for element in self.element_list:
+            element.draw(self.canvas)
 
-    def draw_target(self):
-        """Draw target value."""
-        x = (self.width - SCREEN_PADDING) / 8 * 7
-        y = SCREEN_PADDING
-        w = (self.width - SCREEN_PADDING) / 8 - SCREEN_PADDING
-        h = self.height / 2 - SCREEN_PADDING
-        
-        self.canvas.create_rectangle(x, y, x + w, y + h, fill='black')
-        self.canvas.create_text(
-            x + w/2,
-            y + h + SCREEN_PADDING,
-            text=f'Target: {self.target}',
-            font=('Arial', 18)
-        )
+    def render_target(self):
+        x = (self.screen_width - padding_screen) / 8 * 7
+        y = padding_screen
+        width = (self.screen_width - padding_screen) / 8 - padding_screen
+        height = self.screen_height / 2 - padding_screen
+        self.canvas.create_rectangle(x, y, x + width, y + height, fill='black')
+        self.canvas.create_text(x + width // 2, y + height + padding_screen, text=f'{self.target_value}', font=('Arial', 18))
 
-    def draw_solution(self, solution, generation):
-        """Draw current solution."""
-        for item, selected in zip(self.items_list, solution):
-            item.draw(self.canvas, selected)
-            
-        x = (self.width - SCREEN_PADDING) / 8 * 6
-        y = SCREEN_PADDING
-        w = (self.width - SCREEN_PADDING) / 8 - SCREEN_PADDING
-        h = self.height / 4 * 3
-        
-        self.canvas.create_text(
-            x + w,
-            y + h + SCREEN_PADDING*2,
-            text=f'Generation {generation}',
-            font=('Arial', 18)
-        )
+    def render_sum(self, total_sum, target):
+        x = (self.screen_width - padding_screen) / 8 * 6
+        y = padding_screen
+        width = (self.screen_width - padding_screen) / 8 - padding_screen
+        height = self.screen_height / 2 - padding_screen
+        height *= (total_sum / target)
+        self.canvas.create_rectangle(x, y, x + width, y + height, fill='black')
+        self.canvas.create_text(x + width // 2, y + height + padding_screen, text=f'{total_sum}', font=('Arial', 18))
 
-    def draw_sum(self, total):
-        """Draw current solution value."""
-        x = (self.width - SCREEN_PADDING) / 8 * 6
-        y = SCREEN_PADDING
-        w = (self.width - SCREEN_PADDING) / 8 - SCREEN_PADDING
-        h = self.height / 2 - SCREEN_PADDING
-        
-        ratio = total / self.target if self.target else 0
-        current_h = h * ratio
-        
-        self.canvas.create_rectangle(x, y, x + w, y + current_h, fill='black')
-        self.canvas.create_text(
-            x + w/2,
-            y + current_h + SCREEN_PADDING,
-            text=f'{total} ({"+- "[total > self.target]}{abs(total-self.target)})',
-            font=('Arial', 18)
-        )
+    def render_genome(self, genome, generation_number):
+        for i in range(num_elements):
+            element = self.element_list[i]
+            active = genome[i]
+            element.draw(self.canvas, active)
+        x = (self.screen_width - padding_screen) / 8 * 6
+        y = padding_screen
+        width = (self.screen_width - padding_screen) / 8 - padding_screen
+        height = self.screen_height / 4 * 3
+        self.canvas.create_text(x + width, y + height + padding_screen * 2, text=f'Generation {generation_number}', font=('Arial', 18))
+
+    def execute(self):
+        global population_size
+        global num_iterations
+
+        def calculate_sum(genome):
+            total = sum(self.element_list[i].value for i in range(len(genome)) if genome[i])
+            return total
+
+        def evaluate_fitness(genome):
+            return abs(calculate_sum(genome) - self.target_value)
+
+        def generate_population(previous_population=None, fitness_values=None):
+            population = []
+            if previous_population is None:
+                for _ in range(population_size):
+                    genome = [random.random() < fraction_target for _ in range(num_elements)]
+                    population.append(genome)
+                return population
+            else:
+                elites = [previous_population[i] for i in range(elite_count)]
+                population.extend(elites)
+
+                while len(population) < population_size:
+                    parents = random.sample(previous_population, 2)
+                    crossover_point = random.randint(0, num_elements - 1)
+                    child = parents[0][:crossover_point] + parents[1][crossover_point:]
+                    if random.random() < mutation_probability:
+                        mutate_index = random.randint(0, num_elements - 1)
+                        child[mutate_index] = not child[mutate_index]
+                    population.append(child)
+
+                return population
+
+        def process_generation(generation=0, current_population=None):
+            if generation >= num_iterations:
+                return
+
+            if current_population is None:
+                current_population = generate_population()
+
+            fitness_values = sorted(current_population, key=evaluate_fitness)
+            best_genome = fitness_values[0]
+            best_fitness = evaluate_fitness(best_genome)
+
+            self.after(0, self.clear_canvas)
+            self.after(0, self.render_target)
+            self.after(0, self.render_sum, calculate_sum(best_genome), self.target_value)
+            self.after(0, self.render_genome, best_genome, generation)
+
+            if best_fitness == 0:
+                print(f'Target met at generation {generation}!')
+                return  
+            self.after(int(delay_time * 1000), process_generation, generation + 1, generate_population(current_population))
+
+        process_generation()
+
 
 if __name__ == '__main__':
-    UI()
+    KnapsackUI()
